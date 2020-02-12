@@ -1,0 +1,98 @@
+cd C:\Users\Administrador\Desktop
+
+Write-Host Estas son las cosas que puedes seleccionar:
+write-host 1º Estructura 
+write-host 2º.Deshabilitar usuarios y moverlos a la unidad organizativa de los deshabilitados.
+Write-Host 3º.Borar todas las  UO que esten en el txt.
+Write-Host 4º.Crear carpeta compartida para cada usuario.
+
+$leer = read-host "selecciona lo que desea hacer"
+
+
+"---------------------------------------------------------------------------------------------------------------"
+if ($leer -eq "1º" ){
+
+cd C:\Users\Administrador\Desktop
+
+foreach ($linea in gc .\fichero.txt){
+    switch($linea.split(",")[0])
+    {
+        "ou"
+        {
+        $OU = $linea.split(",")[1]
+         New-ADOrganizationalUnit -Name $OU -ProtectedFromAccidentalDeletion $false -Path "DC=andel,DC=local"
+        }
+        "grupo"{
+        $OU = $linea.split(",")[2]
+        $grupo = $linea.split(",")[1]
+        $miembros = $linea.split(",")[3..13]
+          New-ADGroup -Name $grupo -GroupScope Global -Path "OU=$OU,DC=andel,DC=local"
+           Add-ADGroupMember $grupo -Members $miembros
+        }
+        "usuario"{
+        $contraseña = $linea.split(",")[2]
+        $usuario = $linea.split(",")[1]
+        $OU = $linea.split(",")[3]
+        New-ADUser -Name $usuario -Sam $usuario -Path "OU=$OU,DC=andel,DC=local" -AccountPassword (ConvertTo-SecureString $contraseña -AsPlainText -force) -Enable $true
+        
+        
+        }
+    }
+}
+
+
+}
+
+#deshabilitar usuarios y moverlos a la unidad organizativa de los deshabilitados
+
+if ($leer -eq "2º"){
+
+##################################################################################################
+$OU="UnidadDeshabilitados"
+New-ADOrganizationalUnit -Name $OU -ProtectedFromAccidentalDeletion $false -Path "DC=andel,DC=local"
+##################################################################################################
+
+$deshabilitadas=Get-ADUser -Filter 'samAccountName -like "*"' | where Enabled -ne "True"
+$rutadeshabilitadas=$deshabilitadas.DistinguishedName
+$deshabilitadas=$deshabilitadas.name
+$pathdeshabilitados=(Get-ADOrganizationalUnit -Filter 'Name -like "*UnidadDeshabilitados*"').DistinguishedName
+foreach($rutadeshabilitada in $rutadeshabilitadas){
+    Move-ADObject $rutadeshabilitada -TargetPath "$pathdeshabilitados"
+    
+##################################################################################################
+}
+}
+
+
+#Borar todas las  UO que esten en el txt.
+
+if ($leer -eq "3º"){
+
+
+cd C:\Users\Administrador\Desktop
+ get-content .\fichero.txt | foreach-object {Get-ADOrganizationalUnit -Filter {Name -eq $_ } | Set-ADOrganizationalUnit -ProtectedFromAccidentalDeletion:$false}
+  get-content .\fichero.txt | foreach-object {Get-ADOrganizationalUnit -Filter {Name -eq $_ } | Remove-ADOrganizationalUnit -confirm:$false}
+
+}
+
+#Crear carpeta compartida para cada usuario.
+
+if ($leer -eq "4º" ){
+
+
+Import-Module SmbShare
+$users=(Get-ADUser -Filter *).Name | select -skip 1
+foreach($usuario in $users){
+
+    New-Item "C:\Users\Administrador\Downloads\$usuario" -ItemType Directory -Force
+    New-SMBShare –Name $usuario –Path C:\Users\Administrador\Downloads\$usuario –FullAccess 'Administrador' -ChangeAccess $usuario -ReadAccess 'Usuarios'
+    
+    }
+
+
+}
+
+
+
+
+
